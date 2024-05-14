@@ -1,5 +1,6 @@
 # Naive Implementation of the Federated Learning algorithm FedSGD on the MNIST dataset
 # In this implementation, the server is responsible for aggregating the model updates from the clients, and updating the global model
+# SGD version when B = max and E = 1
 
 import torch
 import torch.nn as nn
@@ -11,22 +12,9 @@ import torchvision.datasets as datasets
 import numpy as np
 import random
 from sklearn.metrics import accuracy_score
+from models import Net, Cnn
 
 device = 'mps'
-
-class Net(nn.Module):
-    def __init__(self):
-        super(Net, self).__init__()
-        self.fc1 = nn.Linear(28*28, 128)
-        self.fc2 = nn.Linear(128, 128)
-        self.fc3 = nn.Linear(128, 10)
-    
-    def forward(self, x):
-        x = x.view(-1, 28*28)
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = self.fc3(x)
-        return x
     
 class Client:
     def __init__(self, id, data, model):

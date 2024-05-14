@@ -1,2 +1,3 @@
 fed_sgd_multithread.py
 data/
+__pycache__/
