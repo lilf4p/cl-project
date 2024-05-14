@@ -1,33 +1,47 @@
-# Naive Implementation of the Federated Learning algorithm FedSGD on the MNIST dataset
-# In this implementation, the server is responsible for aggregating the model updates from the clients, and updating the global model
-# SGD version when B = max and E = 1
-
+# Multithreaded Federated Learning with PyTorch
 import torch
+import numpy as np
+import random
+from sklearn.metrics import accuracy_score
+import joblib
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 import torch.utils.data as data
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
-import numpy as np
-import random
-from sklearn.metrics import accuracy_score
-from models import Net, Cnn
+import tqdm
 
 device = 'mps'
+
+class Net(nn.Module):
+    def __init__(self):
+        super(Net, self).__init__()
+        self.fc1 = nn.Linear(28*28, 128)
+        self.fc2 = nn.Linear(128, 128)
+        self.fc3 = nn.Linear(128, 10)
+    
+    def forward(self, x):
+        x = x.view(-1, 28*28)
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        x = self.fc3(x)
+        return x
     
 class Client:
-    def __init__(self, id, data, model, lr=0.01, weight_decay=10e-6):
+    def __init__(self, id, data, model, lr=0.01, weight_decay=10e-5):
         self.id = id
         self.data = data
-        self.model = model
+        self.model = model.to(device)
         self.optimizer = optim.SGD(self.model.parameters(), lr=lr, weight_decay=weight_decay)
         self.loss_func = nn.CrossEntropyLoss()
-    
-    def train(self, num_epochs):
+
+    # TODO: Add early stopping
+    def train(self, num_epochs, params, progress_bar):
+        self.model.load_state_dict(params)
+        self.model.train()
+        running_loss = 0.0
         for epoch in range(num_epochs):
-            self.model.train()
-            running_loss = 0.0
             for batch_idx, (x, y) in enumerate(self.data):
                 x, y = x.to(device), y.to(device)
                 self.optimizer.zero_grad()
@@ -36,7 +50,8 @@ class Client:
                 loss.backward()
                 self.optimizer.step()
                 running_loss += loss.item()
-            print('---- Epoch %d: loss=%.3f' % (epoch, running_loss/len(self.data)))
+            progress_bar.update(1)
+        progress_bar.set_postfix({'loss': running_loss/len(self.data)})
         return running_loss/len(self.data)
     
     def get_params(self):
@@ -85,12 +100,12 @@ def main():
     np.random.seed(42)
     torch.manual_seed(42)
     
-    T = 5 # number of rounds
-    K = 10 # number of clients
+    T = 15 # number of rounds
+    K = 16 # number of clients
     C = 1 # fraction of clients to be sampled per round
     num_clients = max(int(K*C), 1)
-    E = 10 # number of local epochs
-    B = 128 # local batch size
+    E = 2 # number of local epochs
+    B = 32 # local batch size
     
     transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
     trainset = datasets.MNIST(root='./data', train=True, download=True, transform=transform)
@@ -98,7 +113,7 @@ def main():
     testset = datasets.MNIST(root='./data', train=False, download=True, transform=transform)
 
     trainloader = []
-    num_samples = len(trainset) // num_clients
+    num_samples = 1000 #len(trainset) // num_clients
     for i in range(num_clients):
         indices = list(range(i*num_samples, (i+1)*num_samples))
         sampler = data.SubsetRandomSampler(indices)
@@ -111,18 +126,15 @@ def main():
 
     clients = []
     for i in range(num_clients):
-        client = Client(i, trainloader[i], Cnn().to(device), lr=0.01, weight_decay=10e-6)
+        client = Client(i, trainloader[i], Net(), lr=0.01, weight_decay=10e-5)
         clients.append(client)
     
-    server = Server(clients, Cnn())
+    server = Server(clients, Net())
     
     for r in range(T):
-        print('Round %d' % r)
-        for client in clients:
-            print('-- Client %d' % client.id)
-            client.set_params(server.get_params())
-            loss = client.train(E)
-            print('-- Client %d: loss=%.3f' % (client.id, loss))
+        params = server.get_params()
+        progress_bar = tqdm.tqdm(total=E*num_clients, position=0, leave=False, desc='Round %d' % r)
+        joblib.Parallel(n_jobs=num_clients, backend="threading")(joblib.delayed(client.train)(E, params, progress_bar) for client in clients)
         server.aggregate()
         val_loss, val_acc = server.test(valoader)
         print('Val loss: %.3f, accuracy: %.3f' % (val_loss, val_acc))
