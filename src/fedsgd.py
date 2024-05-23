@@ -76,6 +76,9 @@ def fedSgdSeq(
         root="./data", train=False, download=True, transform=transform
     )
 
+    if num_samples * num_clients > len(trainset):
+        raise ValueError("The number of samples per client is too big")
+
     trainloader = []
     for i in range(num_clients):
         indices = list(range(i * num_samples, (i + 1) * num_samples))
@@ -221,4 +224,4 @@ def fedSgdPar(
 
 
 if __name__ == "__main__":
-    fedSgd()
+    fedSgdSeq()
