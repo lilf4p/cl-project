@@ -25,12 +25,7 @@ class Client:
         )
         self.loss_func = nn.CrossEntropyLoss()
 
-    # TODO: Improve the training method
-    #   - Add early stopping (inner validation and patience)
-    #    to avoid overfitting for bigger subsets and more epochs settings
-    #   - Other training optimizations
-    #   - Find the best hyperparameters
-    def train(self, num_epochs, patience, params, progress_bar):
+    def train(self, num_epochs, params, progress_bar):
         """
         Train the model for a number of epochs
 

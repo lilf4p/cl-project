@@ -28,7 +28,7 @@ def fedSgdSeq(
     B=128,
     num_samples=1000,
     lr=0.01,
-    weight_decay=10e-6,
+    weight_decay=0,
     patience=5,
 ):
     """
@@ -46,8 +46,8 @@ def fedSgdSeq(
         weight_decay (float): Weight decay of the client optimizer
         patience (int): Patience for early stopping
 
-        Returns:
-            None
+    Returns:
+        (float, float): Test loss and test accuracy
     """
 
     print("Running the Sequential implementatiopn of FedSGD on MNIST dataset")
@@ -105,20 +105,26 @@ def fedSgdSeq(
     server = Server(clients, model)  # experiment parameters
 
     # Federated learning Algorithm
+    val_losses = []
+    best_model = None
     for r in range(T):
         params = server.get_params()
         progress_bar = tqdm.tqdm(
             total=E * num_clients, position=0, leave=False, desc="Round %d" % r
         )
         for client in clients:
-            loss = client.train(E, patience, params, progress_bar)
+            loss = client.train(E, params, progress_bar)
         server.aggregate()
         val_loss, val_acc = server.test(valoader)
+        val_losses.append(val_loss)
+        # TODO: Early stopping
         print("Server - Val loss: %.3f, Val accuracy: %.3f" % (val_loss, val_acc))
 
     test_loss, test_acc = server.test(testloader)
     print("-----------------------------")
     print("-- Test loss: %.3f, accuracy: %.3f --" % (test_loss, test_acc))
+
+    return test_loss, test_acc
 
 
 def fedSgdPar(
@@ -130,7 +136,7 @@ def fedSgdPar(
     B=128,
     num_samples=1000,
     lr=0.01,
-    weight_decay=10e-6,
+    weight_decay=0,
     patience=5,
 ):
     """
@@ -148,8 +154,8 @@ def fedSgdPar(
         weight_decay (float): Weight decay of the client optimizer
         patience (int): Patience for early stopping
 
-        Returns:
-            None
+    Returns:
+    (float, float): Test loss and test accuracy
     """
 
     print("Running the Parallel implementation FedSGD on MNIST dataset")
@@ -178,6 +184,11 @@ def fedSgdPar(
         root="./data", train=False, download=True, transform=transform
     )
 
+    print("- Data Split: ", len(trainset), len(valset), len(testset))
+
+    if num_samples * num_clients > len(trainset):
+        raise ValueError("The number of samples per client is too big")
+
     trainloader = []
     for i in range(num_clients):
         indices = list(range(i * num_samples, (i + 1) * num_samples))
@@ -204,23 +215,29 @@ def fedSgdPar(
     server = Server(clients, model)
 
     # Federated learning Algorithm
+    val_losses = []
+    best_model = None
     for r in range(T):
         params = server.get_params()
         progress_bar = tqdm.tqdm(
             total=E * num_clients, position=0, leave=False, desc="Round %d" % r
         )
-        # TODO: Add a cold start for the first round???
-        joblib.Parallel(n_jobs=num_clients, backend="threading")(
-            joblib.delayed(client.train)(E, patience, params, progress_bar)
-            for client in clients
+        joblib.Parallel(n_jobs=8, backend="threading")(
+            joblib.delayed(client.train)(E, params, progress_bar) for client in clients
         )
         server.aggregate()
         val_loss, val_acc = server.test(valoader)
+        val_losses.append(val_loss)
+        # TODO: Early stopping
         print("Server - Val loss: %.3f, Val accuracy: %.3f" % (val_loss, val_acc))
 
+    # test the model
+    server.model.load_state_dict(best_model)
     test_loss, test_acc = server.test(testloader)
     print("-----------------------------")
     print("-- Test loss: %.3f, Test accuracy: %.3f --" % (test_loss, test_acc))
+
+    return test_loss, test_acc
 
 
 if __name__ == "__main__":
