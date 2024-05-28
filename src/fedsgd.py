@@ -2,6 +2,7 @@
 # In this implementation, the server is responsible for aggregating the model updates from the clients, and updating the global model
 # SGD version when B = max and E = 1
 
+from ast import Dict
 import torch
 import torch.utils.data as data
 import torchvision.transforms as transforms
@@ -15,6 +16,7 @@ import random
 from src.models import Net, Cnn
 from src.Client import Client
 from src.Server import Server
+from src.utils import EarlyStopper
 
 device = "mps"
 
@@ -29,7 +31,7 @@ def fedSgdSeq(
     num_samples=1000,
     lr=0.01,
     weight_decay=0,
-    patience=5,
+    patience=None,
 ):
     """
     Run the sequential implementation of FedSGD on the MNIST dataset
@@ -106,7 +108,8 @@ def fedSgdSeq(
 
     # Federated learning Algorithm
     val_losses = []
-    best_model = None
+    val_accs = []
+    early_stopper = EarlyStopper(patience, min_delta=10e-3)
     for r in range(T):
         params = server.get_params()
         progress_bar = tqdm.tqdm(
@@ -117,14 +120,24 @@ def fedSgdSeq(
         server.aggregate()
         val_loss, val_acc = server.test(valoader)
         val_losses.append(val_loss)
-        # TODO: Early stopping
+        val_accs.append(val_acc)
+        if early_stopper.early_stop(val_loss):
+            print("Early stopping")
+            break
         print("Server - Val loss: %.3f, Val accuracy: %.3f" % (val_loss, val_acc))
 
     test_loss, test_acc = server.test(testloader)
     print("-----------------------------")
     print("-- Test loss: %.3f, accuracy: %.3f --" % (test_loss, test_acc))
 
-    return test_loss, test_acc
+    return Dict(
+        {
+            "test_loss": test_loss,
+            "test_acc": test_acc,
+            "val_losses": val_losses,
+            "val_accs": val_accs,
+        }
+    )
 
 
 def fedSgdPar(
@@ -137,7 +150,7 @@ def fedSgdPar(
     num_samples=1000,
     lr=0.01,
     weight_decay=0,
-    patience=5,
+    patience=1,
 ):
     """
     Run the parallel implementation of FedSGD on the MNIST dataset
@@ -216,7 +229,8 @@ def fedSgdPar(
 
     # Federated learning Algorithm
     val_losses = []
-    best_model = None
+    val_accs = []
+    early_stopper = EarlyStopper(patience, min_delta=10e-3)
     for r in range(T):
         params = server.get_params()
         progress_bar = tqdm.tqdm(
@@ -228,16 +242,24 @@ def fedSgdPar(
         server.aggregate()
         val_loss, val_acc = server.test(valoader)
         val_losses.append(val_loss)
-        # TODO: Early stopping
+        val_accs.append(val_acc)
+        if early_stopper.early_stop(val_loss):
+            print("Early stopping")
+            break
         print("Server - Val loss: %.3f, Val accuracy: %.3f" % (val_loss, val_acc))
 
     # test the model
-    server.model.load_state_dict(best_model)
     test_loss, test_acc = server.test(testloader)
-    print("-----------------------------")
     print("-- Test loss: %.3f, Test accuracy: %.3f --" % (test_loss, test_acc))
 
-    return test_loss, test_acc
+    return Dict(
+        {
+            "test_loss": test_loss,
+            "test_acc": test_acc,
+            "val_losses": val_losses,
+            "val_accs": val_accs,
+        }
+    )
 
 
 if __name__ == "__main__":

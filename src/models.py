@@ -42,4 +42,4 @@ class Cnn(nn.Module):
         return "Cnn"
 
 
-# TODO: Add more models
+# TODO: Add LSTM model
