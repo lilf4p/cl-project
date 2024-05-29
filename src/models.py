@@ -40,6 +40,3 @@ class Cnn(nn.Module):
 
     def get_type(self):
         return "Cnn"
-
-
-# TODO: Add LSTM model

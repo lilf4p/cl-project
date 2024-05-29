@@ -3,6 +3,8 @@
 # SGD version when B = max and E = 1
 
 from ast import Dict
+from unittest import result
+from sympy import ordered
 import torch
 import torch.utils.data as data
 import torchvision.transforms as transforms
@@ -31,7 +33,8 @@ def fedSgdSeq(
     num_samples=1000,
     lr=0.01,
     weight_decay=0,
-    patience=None,
+    patience=1,
+    verbose=True,
 ):
     """
     Run the sequential implementation of FedSGD on the MNIST dataset
@@ -52,11 +55,14 @@ def fedSgdSeq(
         (float, float): Test loss and test accuracy
     """
 
-    print("Running the Sequential implementatiopn of FedSGD on MNIST dataset")
-    print(
-        f"- Parameters: T={T}, K={K}, C={C}, E={E}, B={B}, num_samples={num_samples}, lr={lr}, weight_decay={weight_decay}, patience={patience}"
-    )
-    print(f"- Model: {model.get_type()}")
+    if verbose:
+        print("Running the Sequential implementatiopn of FedSGD on MNIST dataset")
+    if verbose:
+        print(
+            f"- Parameters: T={T}, K={K}, C={C}, E={E}, B={B}, num_samples={num_samples}, lr={lr}, weight_decay={weight_decay}, patience={patience}"
+        )
+    if verbose:
+        print(f"- Model: {model.get_type()}")
 
     # Set the random seed
     random.seed(42)
@@ -122,22 +128,26 @@ def fedSgdSeq(
         val_losses.append(val_loss)
         val_accs.append(val_acc)
         if early_stopper.early_stop(val_loss):
-            print("Early stopping")
+            if verbose:
+                print("Early stopping")
             break
-        print("Server - Val loss: %.3f, Val accuracy: %.3f" % (val_loss, val_acc))
+        if verbose:
+            print("Server - Val loss: %.3f, Val accuracy: %.3f" % (val_loss, val_acc))
 
     test_loss, test_acc = server.test(testloader)
-    print("-----------------------------")
-    print("-- Test loss: %.3f, accuracy: %.3f --" % (test_loss, test_acc))
+    if verbose:
+        print("-----------------------------")
+    if verbose:
+        print("-- Test loss: %.3f, accuracy: %.3f --" % (test_loss, test_acc))
 
-    return Dict(
-        {
-            "test_loss": test_loss,
-            "test_acc": test_acc,
-            "val_losses": val_losses,
-            "val_accs": val_accs,
-        }
-    )
+    result = {
+        "test_loss": test_loss,
+        "test_acc": test_acc,
+        "val_losses": val_losses,
+        "val_accs": val_accs,
+    }
+
+    return result
 
 
 def fedSgdPar(
@@ -151,6 +161,9 @@ def fedSgdPar(
     lr=0.01,
     weight_decay=0,
     patience=1,
+    verbose=True,
+    noiid=False,
+    path="model.pth",
 ):
     """
     Run the parallel implementation of FedSGD on the MNIST dataset
@@ -171,11 +184,14 @@ def fedSgdPar(
     (float, float): Test loss and test accuracy
     """
 
-    print("Running the Parallel implementation FedSGD on MNIST dataset")
-    print(
-        f"- Parameters: T={T}, K={K}, C={C}, E={E}, B={B}, num_samples={num_samples}, lr={lr}, weight_decay={weight_decay}, patience={patience}"
-    )
-    print(f"- Model: {model.get_type()}")
+    if verbose:
+        print("Running the Parallel implementation FedSGD on MNIST dataset")
+    if verbose:
+        print(
+            f"- Parameters: T={T}, K={K}, C={C}, E={E}, B={B}, num_samples={num_samples}, lr={lr}, weight_decay={weight_decay}, patience={patience}"
+        )
+    if verbose:
+        print(f"- Model: {model.get_type()}")
 
     # Set the random seed
     random.seed(42)
@@ -197,17 +213,36 @@ def fedSgdPar(
         root="./data", train=False, download=True, transform=transform
     )
 
-    print("- Data Split: ", len(trainset), len(valset), len(testset))
+    if verbose:
+        print("- Data Split: ", len(trainset), len(valset), len(testset))
 
     if num_samples * num_clients > len(trainset):
         raise ValueError("The number of samples per client is too big")
 
-    trainloader = []
-    for i in range(num_clients):
-        indices = list(range(i * num_samples, (i + 1) * num_samples))
-        sampler = data.SubsetRandomSampler(indices)
-        loader = data.DataLoader(trainset, batch_size=B, sampler=sampler)
-        trainloader.append(loader)
+    if noiid:
+        if verbose:
+            print("Using non-IID data")
+        # get all the trainig data from one class
+        classes = trainset.dataset.targets.unique().numpy()
+        class_indices = {}
+        for c in classes:
+            class_indices[c] = np.where(trainset.dataset.targets == c)[0]
+        trainloader = []
+        # each client gets data from one class only (non-IID) with no overlap
+        for i in range(num_clients):
+            indices = np.random.choice(class_indices[i], num_samples, replace=False)
+            sampler = data.SubsetRandomSampler(indices)
+            loader = data.DataLoader(trainset, batch_size=B, sampler=sampler)
+            trainloader.append(loader)
+    else:
+        if verbose:
+            print("Using IID data")
+        trainloader = []
+        for i in range(num_clients):
+            indices = list(range(i * num_samples, (i + 1) * num_samples))
+            sampler = data.SubsetRandomSampler(indices)
+            loader = data.DataLoader(trainset, batch_size=B, sampler=sampler)
+            trainloader.append(loader)
 
     valoader = data.DataLoader(valset, batch_size=B, shuffle=True)
 
@@ -244,22 +279,28 @@ def fedSgdPar(
         val_losses.append(val_loss)
         val_accs.append(val_acc)
         if early_stopper.early_stop(val_loss):
-            print("Early stopping")
+            if verbose:
+                print("Early stopping")
             break
-        print("Server - Val loss: %.3f, Val accuracy: %.3f" % (val_loss, val_acc))
+        if verbose:
+            print("Server - Val loss: %.3f, Val accuracy: %.3f" % (val_loss, val_acc))
 
     # test the model
     test_loss, test_acc = server.test(testloader)
-    print("-- Test loss: %.3f, Test accuracy: %.3f --" % (test_loss, test_acc))
+    if verbose:
+        print("-- Test loss: %.3f, Test accuracy: %.3f --" % (test_loss, test_acc))
 
-    return Dict(
-        {
-            "test_loss": test_loss,
-            "test_acc": test_acc,
-            "val_losses": val_losses,
-            "val_accs": val_accs,
-        }
-    )
+    # save the model
+    server.save(path)
+
+    result = {
+        "test_loss": test_loss,
+        "test_acc": test_acc,
+        "val_losses": val_losses,
+        "val_accs": val_accs,
+    }
+
+    return result
 
 
 if __name__ == "__main__":

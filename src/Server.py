@@ -65,3 +65,6 @@ class Server:
 
     def set_params(self, params):
         self.model.load_state_dict(params)
+
+    def save(self, path):
+        torch.save(self.model.state_dict(), path)
