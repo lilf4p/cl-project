@@ -1,18 +1,14 @@
-# Federated Learning from scratch using Pytorch
-## Continual Learning Project - 2024
-This repository contains the code for Federated Learning from scratch using Pytorch.
+# FedAVG
+## A pytorch implementation of Federated Learning from scratch
 
-## Table of Contents
-1. [Introduction](#introduction)
-2. [Installation](#installation)
-3. [Usage](#usage)
-4. [Author](#contact)
-5. [References](#references)
+![fedavg](images/fedavg.png)
+
+This repository contains the code for the FedAVG project developed for the course of "Continual Learning" at the University of Pisa.
 
 ## Introduction
 Federated Learning is a machine learning setting where many clients (e.g. mobile devices or whole organizations) collaboratively train a model under the orchestration of a central server (e.g. service provider), while keeping the training data decentralized. Federated Learning enables a new paradigm for on-device training that minimizes the need for data to leave the device, effectively addressing user privacy concerns and data security.
 
-This project aims to implement Federated Learning from scratch using Pytorch. The code is based on the paper "Communication-Efficient Learning of Deep Networks from Decentralized Data" by H. Brendan McMahan, Eider Moore, Daniel Ramage, Seth Hampson, and Blaise Agüera y Arcas. The paper can be found [here](https://arxiv.org/abs/1602.05629).
+This project aims to implement the Federated Learning algorithm FedAVG from scratch using Pytorch. The code is based on the paper "Communication-Efficient Learning of Deep Networks from Decentralized Data" by H. Brendan McMahan, et al. [1]
 
 ## Installation
 To install the required dependencies, run the following command:
