@@ -27,9 +27,22 @@ python src/fedsgd.py
 ```
 Alternatively, you can import the `fedSgdPar` function from the `fedsgd.py` file and run it with your own parameters. The function signature is as follows:
 ```python
-result0 = fedSgdPar(model=Net(), T=20, K=100, C=0.1, E=5, B=10,
-                    num_samples=480, lr=0.1, patience=5, weight_decay=10e-5, noiid=False)
+result = fedSgdPar(model=Net(), T=20, K=100, C=0.1, E=5, B=10,
+                    num_samples=480, lr=0.1, patience=5, weight_decay=10e-5, noiid=False, verbose=True)
 ```
+Where:
+- `model` is the neural network model to be trained.
+- `T` is the number of communication rounds.
+- `K` is the number of clients.
+- `C` is the fraction of clients that are sampled per round.
+- `E` is the number of local epochs.
+- `B` is the local batch size.
+- `num_samples` is the number of samples in the dataset.
+- `lr` is the learning rate for the local optimizer.
+- `patience` is the number of rounds to wait before early stopping.
+- `weight_decay` is the L2 regularization parameter.
+- `noiid` is a boolean flag that indicates whether the data is non-IID.
+- `verbose` is a boolean flag that indicates whether to print the training progress.
 
 ## Author
 - [Leonardo Stoppani](https://github.com/lilf4p)

@@ -165,7 +165,7 @@ def fedSgdPar(
     patience=1,
     verbose=True,
     noiid=False,
-    path="model.pth",
+    path="models/model.pth",
 ):
     """
     Run the parallel implementation of FedSGD on the MNIST dataset
