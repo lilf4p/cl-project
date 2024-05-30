@@ -200,7 +200,7 @@ def fedSgdPar(
     np.random.seed(42)
     torch.manual_seed(42)
 
-    num_clients = max(int(K * C), 1)
+    clients_each_round = max(int(K * C), 1)
 
     transform = transforms.Compose(
         [transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]
@@ -219,7 +219,7 @@ def fedSgdPar(
     if verbose:
         print("- Data Split: ", len(trainset), len(valset), len(testset))
 
-    if num_samples * num_clients > len(trainset):
+    if num_samples * K > len(trainset):
         raise ValueError("The number of samples per client is too big")
 
     trainloader = []
@@ -227,18 +227,18 @@ def fedSgdPar(
         if verbose:
             print("Using no-IID data")
         offset = 0
-        for i in range(num_clients):
+        for i in range(K):
             indices = [j for j in range(len(trainset)) if trainset[j][1] == i % 10]
-            indices = indices[offset : offset + num_samples] # avoid overlap
+            indices = indices[offset : offset + num_samples]  # avoid overlap
             sampler = data.SubsetRandomSampler(indices)
             loader = data.DataLoader(trainset, batch_size=B, sampler=sampler)
             trainloader.append(loader)
-            if i % 10 == 9:
+            if i % 10 == 9 and offset + num_samples < len(indices):
                 offset += num_samples
     else:
         if verbose:
             print("Using IID data")
-        for i in range(num_clients):
+        for i in range(K):
             indices = list(range(i * num_samples, (i + 1) * num_samples))
             sampler = data.SubsetRandomSampler(indices)
             loader = data.DataLoader(trainset, batch_size=B, sampler=sampler)
@@ -249,7 +249,7 @@ def fedSgdPar(
     testloader = data.DataLoader(testset, batch_size=B, shuffle=True)
 
     clients = []
-    for i in range(num_clients):
+    for i in range(K):
         client = Client(
             i,
             trainloader[i],
@@ -269,12 +269,14 @@ def fedSgdPar(
     for r in range(T):
         params = server.get_params()
         progress_bar = tqdm.tqdm(
-            total=E * num_clients, position=0, leave=False, desc="Round %d" % r
+            total=E * clients_each_round, position=0, leave=False, desc="Round %d" % r
         )
+        random_clients = random.sample(clients, clients_each_round)
         joblib.Parallel(n_jobs=8, backend="threading")(
-            joblib.delayed(client.train)(E, params, progress_bar) for client in clients
+            joblib.delayed(client.train)(E, params, progress_bar)
+            for client in random_clients
         )
-        server.aggregate()
+        server.aggregate(random_clients)
         val_loss, val_acc = server.test(valoader)
         val_losses.append(val_loss)
         val_accs.append(val_acc)
@@ -287,8 +289,7 @@ def fedSgdPar(
 
     # test the model
     test_loss, test_acc = server.test(testloader)
-    if verbose:
-        print("-- Test loss: %.3f, Test accuracy: %.3f --" % (test_loss, test_acc))
+    print("-- Test loss: %.3f, Test accuracy: %.3f --" % (test_loss, test_acc))
 
     # save the model
     server.save(path)

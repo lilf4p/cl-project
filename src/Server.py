@@ -18,7 +18,7 @@ class Server:
         self.model = model
         self.loss_func = nn.CrossEntropyLoss()
 
-    def aggregate(self):
+    def aggregate(self, sample_clients):
         """
         Aggregate the model parameters from the clients
 
@@ -28,7 +28,7 @@ class Server:
         Returns:
             None
         """
-        params = [client.get_params() for client in self.clients]
+        params = [client.get_params() for client in sample_clients]
         # simple averaging of the clients model parameters
         avg_params = {}
         for key in params[0].keys():
