@@ -4,11 +4,13 @@
 
 from ast import Dict
 from unittest import result
+from matplotlib.pyplot import cla
 from sympy import ordered
 import torch
 import torch.utils.data as data
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
+from torch.utils.data import Subset
 
 import tqdm
 import joblib
@@ -206,6 +208,7 @@ def fedSgdPar(
     trainset = datasets.MNIST(
         root="./data", train=True, download=True, transform=transform
     )
+
     trainset, valset = data.random_split(
         trainset, [int(len(trainset) * 0.8), int(len(trainset) * 0.2)]
     )
@@ -219,25 +222,22 @@ def fedSgdPar(
     if num_samples * num_clients > len(trainset):
         raise ValueError("The number of samples per client is too big")
 
+    trainloader = []
     if noiid:
         if verbose:
-            print("Using non-IID data")
-        # get all the trainig data from one class
-        classes = trainset.dataset.targets.unique().numpy()
-        class_indices = {}
-        for c in classes:
-            class_indices[c] = np.where(trainset.dataset.targets == c)[0]
-        trainloader = []
-        # each client gets data from one class only (non-IID) with no overlap
+            print("Using no-IID data")
+        offset = 0
         for i in range(num_clients):
-            indices = np.random.choice(class_indices[i], num_samples, replace=False)
+            indices = [j for j in range(len(trainset)) if trainset[j][1] == i % 10]
+            indices = indices[offset : offset + num_samples] # avoid overlap
             sampler = data.SubsetRandomSampler(indices)
             loader = data.DataLoader(trainset, batch_size=B, sampler=sampler)
             trainloader.append(loader)
+            if i % 10 == 9:
+                offset += num_samples
     else:
         if verbose:
             print("Using IID data")
-        trainloader = []
         for i in range(num_clients):
             indices = list(range(i * num_samples, (i + 1) * num_samples))
             sampler = data.SubsetRandomSampler(indices)
